@@ -2,9 +2,9 @@ from flask import Flask, jsonify
 
 app = Flask(__name__)
 
-@app.route('/api/hello', methods=['GET'])
-def hello():
-    return jsonify({'message': 'Hello from Vercel!'})
+@app.route('/api/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok', 'message': 'API is running'})
 
 # Export for Vercel
 app.debug = False

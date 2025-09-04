@@ -1,23 +1,10 @@
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
+from flask import Flask, request, jsonify
 import requests
 from bs4 import BeautifulSoup
 import re
-import json
-import os
 from datetime import datetime
-import csv
-from io import StringIO
-import threading
-import time
 
 app = Flask(__name__)
-CORS(app)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-
-# Global variable to store scraping results
-scraping_results = []
-scraping_in_progress = False
 
 def clean_text(text):
     """Clean and normalize text"""
@@ -68,7 +55,6 @@ def extract_pricing_info(soup, url):
         
         # Extract plan name
         if not pricing_data['plan_name']:
-            # Look for common plan name patterns
             plan_patterns = [
                 r'(basic|starter|pro|premium|enterprise|business|personal)',
                 r'(free|trial|demo)',
@@ -143,10 +129,6 @@ def scrape_website(url):
             'error': str(e)
         }
 
-@app.route('/api/health')
-def health():
-    return jsonify({'status': 'ok', 'message': 'API is running'})
-
 @app.route('/api/scrape_single', methods=['POST'])
 def scrape_single():
     data = request.get_json()
@@ -158,149 +140,9 @@ def scrape_single():
     result = scrape_website(domain)
     return jsonify(result)
 
-@app.route('/api/scrape_bulk', methods=['POST'])
-def scrape_bulk():
-    global scraping_results, scraping_in_progress
-    
-    if scraping_in_progress:
-        return jsonify({'error': 'Scraping already in progress'}), 400
-    
-    scraping_in_progress = True
-    scraping_results = []
-    
-    if 'file' in request.files:
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-        
-        if not file.filename.endswith('.csv'):
-            return jsonify({'error': 'Please upload a CSV file'}), 400
-        
-        # Read CSV file
-        try:
-            csv_content = file.read().decode('utf-8')
-            csv_reader = csv.reader(StringIO(csv_content))
-            domains = [row[0].strip() for row in csv_reader if row and row[0].strip()]
-        except Exception as e:
-            scraping_in_progress = False
-            return jsonify({'error': f'Error reading CSV file: {str(e)}'}), 400
-    
-    else:
-        # Get domains from text input
-        try:
-            data = request.get_json()
-            if data:
-                domains_text = data.get('domains', '').strip()
-                domains = [domain.strip() for domain in domains_text.split('\n') if domain.strip()]
-            else:
-                domains = []
-        except:
-            domains = []
-    
-    if not domains:
-        scraping_in_progress = False
-        return jsonify({'error': 'No domains provided'}), 400
-    
-    def scrape_domains():
-        global scraping_results, scraping_in_progress
-        
-        for i, domain in enumerate(domains):
-            if not scraping_in_progress:
-                break
-                
-            result = scrape_website(domain)
-            if result['success']:
-                scraping_results.append(result['data'])
-            else:
-                scraping_results.append({
-                    'url': domain,
-                    'plan_name': '',
-                    'price': '',
-                    'billing_period': '',
-                    'features': [],
-                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'error': result['error']
-                })
-            
-            # Add small delay to be respectful
-            time.sleep(1)
-        
-        scraping_in_progress = False
-    
-    # Start scraping in background thread
-    thread = threading.Thread(target=scrape_domains)
-    thread.start()
-    
-    return jsonify({'message': f'Started scraping {len(domains)} domains'})
-
-@app.route('/api/get_results')
-def get_results():
-    global scraping_results, scraping_in_progress
-    
-    return jsonify({
-        'results': scraping_results,
-        'in_progress': scraping_in_progress,
-        'total': len(scraping_results)
-    })
-
-@app.route('/api/stop_scraping')
-def stop_scraping():
-    global scraping_in_progress
-    scraping_in_progress = False
-    return jsonify({'message': 'Scraping stopped'})
-
-@app.route('/api/download_csv')
-def download_csv():
-    global scraping_results
-    
-    if not scraping_results:
-        return jsonify({'error': 'No data to download'}), 400
-    
-    # Create CSV content
-    output = StringIO()
-    writer = csv.writer(output)
-    
-    # Write header
-    writer.writerow(['URL', 'Plan Name', 'Price', 'Billing Period', 'Features', 'Timestamp', 'Error'])
-    
-    # Write data
-    for result in scraping_results:
-        features = '; '.join(result.get('features', []))
-        writer.writerow([
-            result.get('url', ''),
-            result.get('plan_name', ''),
-            result.get('price', ''),
-            result.get('billing_period', ''),
-            features,
-            result.get('timestamp', ''),
-            result.get('error', '')
-        ])
-    
-    output.seek(0)
-    
-    return send_file(
-        StringIO(output.getvalue()),
-        mimetype='text/csv',
-        as_attachment=True,
-        download_name=f'pricing_data_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
-    )
-
-# Error handlers
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'error': 'Not found'}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({'error': 'Internal server error'}), 500
-
 # Export for Vercel
 app.debug = False
 
 # Vercel serverless function handler
 def handler(request, context):
     return app(request, context)
-
-# Alternative export for Vercel
-if __name__ == '__main__':
-    app.run(debug=True)

@@ -364,7 +364,6 @@
                 </div>
                 <div>
                     <button class="btn btn-secondary" onclick="downloadCSV()" id="download-btn" style="display: none;">Download CSV</button>
-                    <button class="btn btn-danger" onclick="stopScraping()" id="stop-btn" style="display: none;">Stop Scraping</button>
                 </div>
             </div>
             
@@ -469,8 +468,8 @@
 
             showResults();
             updateStatus('processing', 'Starting bulk scraping...');
-            scrapingInProgress = true;
-            document.getElementById('stop-btn').style.display = 'inline-block';
+            scrapingInProgress = false; // No longer needed since we're not polling
+            document.getElementById('stop-btn').style.display = 'none';
             document.getElementById('download-btn').style.display = 'none';
 
             const formData = new FormData();
@@ -489,61 +488,22 @@
                 const result = await response.json();
                 
                 if (response.ok) {
-                    updateStatus('processing', 'Scraping in progress...');
-                    startPolling();
+                    updateStatus('completed', 'Completed');
+                    displayResults(result.results);
+                    document.getElementById('download-btn').style.display = 'inline-block';
                 } else {
                     updateStatus('completed', 'Error');
                     displayError(result.error);
-                    scrapingInProgress = false;
-                    document.getElementById('stop-btn').style.display = 'none';
                 }
             } catch (error) {
                 updateStatus('completed', 'Error');
                 displayError('Network error: ' + error.message);
-                scrapingInProgress = false;
-                document.getElementById('stop-btn').style.display = 'none';
             }
         }
 
-        async function startPolling() {
-            const pollInterval = setInterval(async () => {
-                if (!scrapingInProgress) {
-                    clearInterval(pollInterval);
-                    return;
-                }
 
-                try {
-                    const response = await fetch('/api/get_results');
-                    const data = await response.json();
-                    
-                    if (data.results.length > 0) {
-                        displayResults(data.results);
-                    }
-                    
-                    if (!data.in_progress) {
-                        updateStatus('completed', 'Completed');
-                        scrapingInProgress = false;
-                        document.getElementById('stop-btn').style.display = 'none';
-                        document.getElementById('download-btn').style.display = 'inline-block';
-                        clearInterval(pollInterval);
-                    }
-                } catch (error) {
-                    console.error('Polling error:', error);
-                }
-            }, 2000);
-        }
 
-        async function stopScraping() {
-            try {
-                await fetch('/api/stop_scraping');
-                scrapingInProgress = false;
-                updateStatus('completed', 'Stopped');
-                document.getElementById('stop-btn').style.display = 'none';
-                document.getElementById('download-btn').style.display = 'inline-block';
-            } catch (error) {
-                console.error('Error stopping scraping:', error);
-            }
-        }
+
 
         async function downloadCSV() {
             try {
@@ -631,3 +591,4 @@
     </script>
 </body>
 </html>
+

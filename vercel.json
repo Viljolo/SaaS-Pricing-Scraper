@@ -2,11 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/hello.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "api/index.py",
+      "src": "api/*.py",
       "use": "@vercel/python"
     }
   ],
@@ -14,6 +10,18 @@
     {
       "src": "/api/hello",
       "dest": "/api/hello.py"
+    },
+    {
+      "src": "/api/health",
+      "dest": "/api/health.py"
+    },
+    {
+      "src": "/api/scrape_single",
+      "dest": "/api/scrape_single.py"
+    },
+    {
+      "src": "/api/scrape_bulk",
+      "dest": "/api/scrape_bulk.py"
     },
     {
       "src": "/api/(.*)",
