@@ -1,5 +1,5 @@
-from flask import Flask, render_template, request, jsonify, send_file
-import pandas as pd
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -12,6 +12,7 @@ import threading
 import time
 
 app = Flask(__name__)
+CORS(app)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Global variable to store scraping results
@@ -144,7 +145,7 @@ def scrape_website(url):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return jsonify({'message': 'SaaS Pricing Scraper API', 'status': 'running', 'version': '1.0.0'})
 
 @app.route('/api/health')
 def health():
@@ -190,9 +191,15 @@ def scrape_bulk():
     
     else:
         # Get domains from text input
-        data = request.get_json()
-        domains_text = data.get('domains', '').strip()
-        domains = [domain.strip() for domain in domains_text.split('\n') if domain.strip()]
+        try:
+            data = request.get_json()
+            if data:
+                domains_text = data.get('domains', '').strip()
+                domains = [domain.strip() for domain in domains_text.split('\n') if domain.strip()]
+            else:
+                domains = []
+        except:
+            domains = []
     
     if not domains:
         scraping_in_progress = False
@@ -285,6 +292,15 @@ def download_csv():
 # For Vercel deployment
 if __name__ == '__main__':
     app.run(debug=True)
+
+# Error handlers
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({'error': 'Internal server error'}), 500
 
 # Export for Vercel
 app.debug = False
