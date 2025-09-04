@@ -468,22 +468,29 @@
 
             showResults();
             updateStatus('processing', 'Starting bulk scraping...');
-            scrapingInProgress = false; // No longer needed since we're not polling
-            document.getElementById('stop-btn').style.display = 'none';
             document.getElementById('download-btn').style.display = 'none';
 
-            const formData = new FormData();
-            if (fileInput.files[0]) {
-                formData.append('file', fileInput.files[0]);
-            } else {
-                formData.append('domains', domainsText);
-            }
-
             try {
-                const response = await fetch('/api/scrape_bulk', {
-                    method: 'POST',
-                    body: formData
-                });
+                let response;
+                if (fileInput.files[0]) {
+                    // Handle CSV file upload
+                    const formData = new FormData();
+                    formData.append('file', fileInput.files[0]);
+                    
+                    response = await fetch('/api/scrape_bulk', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else {
+                    // Handle text input
+                    response = await fetch('/api/scrape_bulk', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ domains: domainsText })
+                    });
+                }
 
                 const result = await response.json();
                 
@@ -505,26 +512,48 @@
 
 
 
-        async function downloadCSV() {
-            try {
-                const response = await fetch('/api/download_csv');
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = response.headers.get('content-disposition')?.split('filename=')[1] || 'pricing_data.csv';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                } else {
-                    const error = await response.json();
-                    alert('Error downloading CSV: ' + error.error);
-                }
-            } catch (error) {
-                alert('Error downloading CSV: ' + error.message);
+        function downloadCSV() {
+            // Get the results from the displayed table
+            const table = document.querySelector('.results-table table');
+            if (!table) {
+                alert('No results to download');
+                return;
             }
+            
+            const rows = table.querySelectorAll('tbody tr');
+            if (rows.length === 0) {
+                alert('No results to download');
+                return;
+            }
+            
+            // Create CSV content
+            let csvContent = 'URL,Plan Name,Price,Billing Period,Features,Error\n';
+            
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                const url = cells[0].textContent.trim();
+                const planName = cells[1].textContent.trim();
+                const price = cells[2].textContent.trim();
+                const billingPeriod = cells[3].textContent.trim();
+                const features = cells[4].textContent.trim();
+                const error = cells[5].textContent.trim();
+                
+                // Escape quotes and wrap in quotes if contains comma
+                const escapedFeatures = features.includes(',') ? `"${features.replace(/"/g, '""')}"` : features;
+                
+                csvContent += `${url},${planName},${price},${billingPeriod},${escapedFeatures},${error}\n`;
+            });
+            
+            // Download the CSV file
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pricing_data_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
         }
 
         function displayResults(results) {

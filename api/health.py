@@ -1,14 +1,17 @@
-from flask import Flask, jsonify
+from http.server import BaseHTTPRequestHandler
+import json
 
-app = Flask(__name__)
-
-@app.route('/api/health', methods=['GET'])
-def health():
-    return jsonify({'status': 'ok', 'message': 'API is running'})
-
-# Export for Vercel
-app.debug = False
-
-# Vercel serverless function handler
-def handler(request, context):
-    return app(request, context)
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        
+        response = {
+            'status': 'ok',
+            'message': 'API is running'
+        }
+        
+        self.wfile.write(json.dumps(response).encode())
+        return

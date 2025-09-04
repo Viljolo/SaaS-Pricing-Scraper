@@ -24,10 +24,6 @@
       "dest": "/api/scrape_bulk.py"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/api/index.py"
-    },
-    {
       "src": "/",
       "dest": "/public/index.html"
     },
