@@ -381,6 +381,20 @@
         let currentTab = 'single';
         let scrapingInProgress = false;
 
+        // Test API connection on page load
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch('/api/health');
+                if (response.ok) {
+                    console.log('API is connected');
+                } else {
+                    console.error('API connection failed');
+                }
+            } catch (error) {
+                console.error('API connection error:', error);
+            }
+        });
+
         function switchTab(tab) {
             currentTab = tab;
             

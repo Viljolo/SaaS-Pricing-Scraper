@@ -146,7 +146,11 @@ def scrape_website(url):
 def index():
     return render_template('index.html')
 
-@app.route('/scrape_single', methods=['POST'])
+@app.route('/api/health')
+def health():
+    return jsonify({'status': 'ok', 'message': 'API is running'})
+
+@app.route('/api/scrape_single', methods=['POST'])
 def scrape_single():
     data = request.get_json()
     domain = data.get('domain', '').strip()
@@ -157,7 +161,7 @@ def scrape_single():
     result = scrape_website(domain)
     return jsonify(result)
 
-@app.route('/scrape_bulk', methods=['POST'])
+@app.route('/api/scrape_bulk', methods=['POST'])
 def scrape_bulk():
     global scraping_results, scraping_in_progress
     
@@ -226,7 +230,7 @@ def scrape_bulk():
     
     return jsonify({'message': f'Started scraping {len(domains)} domains'})
 
-@app.route('/get_results')
+@app.route('/api/get_results')
 def get_results():
     global scraping_results, scraping_in_progress
     
@@ -236,13 +240,13 @@ def get_results():
         'total': len(scraping_results)
     })
 
-@app.route('/stop_scraping')
+@app.route('/api/stop_scraping')
 def stop_scraping():
     global scraping_in_progress
     scraping_in_progress = False
     return jsonify({'message': 'Scraping stopped'})
 
-@app.route('/download_csv')
+@app.route('/api/download_csv')
 def download_csv():
     global scraping_results
     
