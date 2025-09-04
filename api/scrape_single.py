@@ -1,70 +1,67 @@
-from http.server import BaseHTTPRequestHandler
 import json
 import requests
 from bs4 import BeautifulSoup
 import re
 from datetime import datetime
-import urllib.parse
 
-class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        # Read the request body
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length)
-        
-        try:
-            # Parse JSON data
-            data = json.loads(post_data.decode('utf-8'))
-            domain = data.get('domain', '').strip()
-            
-            if not domain:
-                self.send_error_response('Please provide a domain')
-                return
-            
-            # Scrape the website
-            result = self.scrape_website(domain)
-            
-            # Send response
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            
-            self.wfile.write(json.dumps(result).encode())
-            
-        except Exception as e:
-            self.send_error_response(str(e))
+def handler(request, context):
+    # Handle CORS preflight
+    if request.get('method') == 'OPTIONS':
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type'
+            },
+            'body': ''
+        }
     
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+    if request.get('method') != 'POST':
+        return {
+            'statusCode': 405,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({'error': 'Method not allowed'})
+        }
     
-    def send_error_response(self, error_message):
-        self.send_response(400)
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
+    try:
+        # Parse request body
+        body = request.get('body', '{}')
+        if isinstance(body, str):
+            data = json.loads(body)
+        else:
+            data = body
         
-        response = {
-            'success': False,
-            'error': error_message
+        domain = data.get('domain', '').strip()
+        
+        if not domain:
+            return {
+                'statusCode': 400,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'error': 'Please provide a domain'})
+            }
+        
+        # Add protocol if missing
+        if not domain.startswith(('http://', 'https://')):
+            domain = 'https://' + domain
+        
+        # Simple scraping
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
-        self.wfile.write(json.dumps(response).encode())
-    
-    def clean_text(self, text):
-        """Clean and normalize text"""
-        if not text:
-            return ""
-        return re.sub(r'\s+', ' ', text.strip())
-    
-    def extract_pricing_info(self, soup, url):
-        """Extract pricing information from a webpage"""
+        response = requests.get(domain, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Extract basic pricing info
         pricing_data = {
-            'url': url,
+            'url': domain,
             'plan_name': '',
             'price': '',
             'billing_period': '',
@@ -72,108 +69,41 @@ class handler(BaseHTTPRequestHandler):
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
-        # Common pricing selectors
-        pricing_selectors = [
-            '.pricing', '.price', '.plan', '.subscription',
-            '[class*="pricing"]', '[class*="price"]', '[class*="plan"]',
-            '[id*="pricing"]', '[id*="price"]', '[id*="plan"]'
-        ]
+        # Look for price patterns
+        text = soup.get_text()
+        price_match = re.search(r'\$[\d,]+(?:\.\d{2})?', text)
+        if price_match:
+            pricing_data['price'] = price_match.group()
         
-        # Find pricing elements
-        pricing_elements = []
-        for selector in pricing_selectors:
-            elements = soup.select(selector)
-            pricing_elements.extend(elements)
+        # Look for plan names
+        plan_patterns = ['basic', 'starter', 'pro', 'premium', 'enterprise']
+        for pattern in plan_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                pricing_data['plan_name'] = pattern.title()
+                break
         
-        # Extract information from pricing elements
-        for element in pricing_elements[:5]:  # Limit to first 5 elements
-            text = self.clean_text(element.get_text())
-            
-            # Extract price
-            price_patterns = [
-                r'\$[\d,]+(?:\.\d{2})?',
-                r'[\d,]+(?:\.\d{2})?\s*(?:USD|dollars?|per\s+month|per\s+year)',
-                r'[\d,]+(?:\.\d{2})?\s*(?:monthly|yearly|annual)'
-            ]
-            
-            for pattern in price_patterns:
-                price_match = re.search(pattern, text, re.IGNORECASE)
-                if price_match and not pricing_data['price']:
-                    pricing_data['price'] = price_match.group()
-                    break
-            
-            # Extract plan name
-            if not pricing_data['plan_name']:
-                plan_patterns = [
-                    r'(basic|starter|pro|premium|enterprise|business|personal)',
-                    r'(free|trial|demo)',
-                    r'(monthly|yearly|annual|quarterly)'
-                ]
-                
-                for pattern in plan_patterns:
-                    plan_match = re.search(pattern, text, re.IGNORECASE)
-                    if plan_match:
-                        pricing_data['plan_name'] = plan_match.group().title()
-                        break
-            
-            # Extract billing period
-            if not pricing_data['billing_period']:
-                period_patterns = [
-                    r'(monthly|per\s+month)',
-                    r'(yearly|annual|per\s+year)',
-                    r'(quarterly|per\s+quarter)',
-                    r'(weekly|per\s+week)'
-                ]
-                
-                for pattern in period_patterns:
-                    period_match = re.search(pattern, text, re.IGNORECASE)
-                    if period_match:
-                        pricing_data['billing_period'] = period_match.group()
-                        break
-            
-            # Extract features
-            feature_elements = element.find_all(['li', 'p', 'span', 'div'])
-            for feature_elem in feature_elements[:10]:  # Limit features
-                feature_text = self.clean_text(feature_elem.get_text())
-                if feature_text and len(feature_text) > 3 and len(feature_text) < 200:
-                    if feature_text not in pricing_data['features']:
-                        pricing_data['features'].append(feature_text)
-        
-        # If no specific pricing found, try to extract general pricing info
-        if not pricing_data['price']:
-            body_text = soup.get_text()
-            price_match = re.search(r'\$[\d,]+(?:\.\d{2})?', body_text)
-            if price_match:
-                pricing_data['price'] = price_match.group()
-        
-        return pricing_data
-    
-    def scrape_website(self, url):
-        """Scrape a single website for pricing information"""
-        try:
-            # Add protocol if missing
-            if not url.startswith(('http://', 'https://')):
-                url = 'https://' + url
-            
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-            
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            pricing_data = self.extract_pricing_info(soup, url)
-            
-            return {
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({
                 'success': True,
                 'data': pricing_data,
                 'error': None
-            }
-            
-        except Exception as e:
-            return {
+            })
+        }
+        
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({
                 'success': False,
-                'data': None,
                 'error': str(e)
-            }
+            })
+        }
