@@ -7,7 +7,8 @@ This application is configured to deploy on Vercel with the following setup:
 ### File Structure
 ```
 SaaS-Pricing-Scraper/
-├── app.py                 # Flask API server
+├── api/
+│   └── index.py          # Flask API serverless function
 ├── vercel.json           # Vercel configuration
 ├── requirements.txt      # Python dependencies
 ├── public/
@@ -17,8 +18,8 @@ SaaS-Pricing-Scraper/
 
 ### Configuration
 
-1. **vercel.json**: Routes API calls to Flask app and serves static files
-2. **app.py**: Flask API with CORS support and proper error handling
+1. **vercel.json**: Routes API calls to serverless function and serves static files
+2. **api/index.py**: Flask API serverless function with CORS support and proper error handling
 3. **requirements.txt**: Minimal dependencies for Vercel compatibility
 
 ### API Endpoints
@@ -51,8 +52,8 @@ If you get 404 errors:
 # Install dependencies
 py -m pip install -r requirements.txt
 
-# Run Flask app
-py app.py
+# Run Flask app (for local testing)
+py api/index.py
 
 # Test API
 curl http://localhost:5000/api/health
