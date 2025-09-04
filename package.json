@@ -1,0 +1,12 @@
+{
+  "name": "saas-pricing-scraper",
+  "version": "1.0.0",
+  "description": "SaaS Pricing Scraper",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
