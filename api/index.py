@@ -296,3 +296,11 @@ def internal_error(error):
 
 # Export for Vercel
 app.debug = False
+
+# Vercel serverless function handler
+def handler(request, context):
+    return app(request, context)
+
+# Alternative export for Vercel
+if __name__ == '__main__':
+    app.run(debug=True)
