@@ -12,7 +12,7 @@ def handler(request, context):
             'headers': {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type'
+                'Access-Control-Allow-Headers': 'Content-Type, x-api-key:'
             },
             'body': ''
         }
@@ -35,10 +35,10 @@ def handler(request, context):
         else:
             data = body
         
-        domains_text = data.get('domains', '').strip()
-        domains = [domain.strip() for domain in domains_text.split('\n') if domain.strip()]
+        urls_text = data.get('urls', '').strip()
+        urls = [url.strip() for url in urls_text.split('\n') if url.strip()]
         
-        if not domains:
+        if not urls:
             return {
                 'statusCode': 400,
                 'headers': {
@@ -49,26 +49,26 @@ def handler(request, context):
             }
         
         # Limit to 2 domains for serverless function
-        domains = domains[:2]
+        urls = urls[:2]
         
         results = []
-        for domain in domains:
+        for url in urls:
             try:
                 # Add protocol if missing
-                if not domain.startswith(('http://', 'https://')):
-                    domain = 'https://' + domain
+                if not url.startswith(('http://', 'https://')):
+                    url = 'https://' + url
                 
                 # Simple scraping
                 headers = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 }
                 
-                response = requests.get(domain, headers=headers, timeout=8)
+                response = requests.get(url, headers=headers, timeout=8)
                 soup = BeautifulSoup(response.content, 'html.parser')
                 
                 # Extract basic pricing info
                 pricing_data = {
-                    'url': domain,
+                    'url': url,
                     'plan_name': '',
                     'price': '',
                     'billing_period': '',
@@ -93,7 +93,7 @@ def handler(request, context):
                 
             except Exception as e:
                 results.append({
-                    'url': domain,
+                    'url': url,
                     'plan_name': '',
                     'price': '',
                     'billing_period': '',
@@ -109,7 +109,7 @@ def handler(request, context):
                 'Access-Control-Allow-Origin': '*'
             },
             'body': json.dumps({
-                'message': f'Scraped {len(results)} domains',
+                'message': f'Scraped {len(results)} urls',
                 'results': results,
                 'total': len(results)
             })

@@ -8,8 +8,28 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1.py"
+      "src": "/api/simple",
+      "dest": "/api/simple.py"
+    },
+    {
+      "src": "/api/test",
+      "dest": "/api/test.py"
+    },
+    {
+      "src": "/api/hello",
+      "dest": "/api/hello.py"
+    },
+    {
+      "src": "/api/health",
+      "dest": "/api/health.py"
+    },
+    {
+      "src": "/api/scrape_single",
+      "dest": "/api/scrape_single.py"
+    },
+    {
+      "src": "/api/scrape_bulk",
+      "dest": "/api/scrape_bulk.py"
     },
     {
       "src": "/",

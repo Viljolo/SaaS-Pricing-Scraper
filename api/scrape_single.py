@@ -12,7 +12,7 @@ def handler(request, context):
             'headers': {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type'
+                'Access-Control-Allow-Headers': 'Content-Type, x-api-key'
             },
             'body': ''
         }
@@ -35,33 +35,33 @@ def handler(request, context):
         else:
             data = body
         
-        domain = data.get('domain', '').strip()
+        url = data.get('url', '').strip()
         
-        if not domain:
+        if not url:
             return {
                 'statusCode': 400,
                 'headers': {
                     'Content-Type': 'application/json',
                     'Access-Control-Allow-Origin': '*'
                 },
-                'body': json.dumps({'error': 'Please provide a domain'})
+                'body': json.dumps({'error': 'Please provide a url'})
             }
         
         # Add protocol if missing
-        if not domain.startswith(('http://', 'https://')):
-            domain = 'https://' + domain
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
         
         # Simple scraping
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
-        response = requests.get(domain, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.content, 'html.parser')
         
         # Extract basic pricing info
         pricing_data = {
-            'url': domain,
+            'url': url,
             'plan_name': '',
             'price': '',
             'billing_period': '',

@@ -323,7 +323,7 @@
     <div class="container">
         <div class="header">
             <h1>SaaS Pricing Scraper</h1>
-            <p>Extract pricing plans from websites with ease. Input a single domain or upload a CSV file with multiple domains.</p>
+            <p>Extract pricing plans from websites with ease. Input a single url or upload a CSV file with multiple urls.</p>
         </div>
 
         <div class="tabs">
@@ -334,7 +334,7 @@
         <!-- Single Domain Tab -->
         <div id="single-tab" class="tab-content active">
             <div class="input-group">
-                <label for="single-domain">Domain URL</label>
+                <label for="single-domain">Url</label>
                 <input type="text" id="single-domain" class="input-field" placeholder="e.g., example.com or https://example.com">
             </div>
             <button class="btn" onclick="scrapeSingle()">Scrape Pricing</button>
@@ -349,8 +349,8 @@
                 <div id="file-name" style="margin-top: 10px; color: #b0b0b0;"></div>
             </div>
             <div class="input-group">
-                <label>Or Enter Domains (one per line)</label>
-                <textarea id="bulk-domains" class="input-field" rows="5" placeholder="example1.com&#10;example2.com&#10;example3.com"></textarea>
+                <label>Or Enter Urls (one per line)</label>
+                <textarea id="bulk-urls" class="input-field" rows="5" placeholder="example1.com&#10;example2.com&#10;example3.com"></textarea>
             </div>
             <button class="btn" onclick="scrapeBulk()">Start Bulk Scraping</button>
         </div>
@@ -423,8 +423,8 @@
         }
 
         async function scrapeSingle() {
-            const domain = document.getElementById('single-domain').value.trim();
-            if (!domain) {
+            const url = document.getElementById('single-domain').value.trim();
+            if (!url) {
                 alert('Please enter a domain');
                 return;
             }
@@ -438,7 +438,7 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ domain: domain })
+                    body: JSON.stringify({ url: url })
                 });
 
                 const result = await response.json();
@@ -459,10 +459,10 @@
 
         async function scrapeBulk() {
             const fileInput = document.getElementById('csv-file');
-            const domainsText = document.getElementById('bulk-domains').value.trim();
+            const urlsText = document.getElementById('bulk-urls').value.trim();
             
-            if (!fileInput.files[0] && !domainsText) {
-                alert('Please upload a CSV file or enter domains');
+            if (!fileInput.files[0] && !urlsText) {
+                alert('Please upload a CSV file or enter urls');
                 return;
             }
 
@@ -488,7 +488,7 @@
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ domains: domainsText })
+                        body: JSON.stringify({ urls: urlsText })
                     });
                 }
 
