@@ -1,225 +1,158 @@
+from http.server import BaseHTTPRequestHandler
 import json
 import requests
 from bs4 import BeautifulSoup
 import re
-from urllib.parse import urljoin, urlparse
+import os
 
-def handler(request, context=None):
-    # Handle CORS preflight
-    if request.get('method') == 'OPTIONS':
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, x-api-key'
-            },
-            'body': ''
-        }
+class handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        try:
+            # Check API key
+            api_key = self.headers.get('x-api-key', '')
+            expected_key = os.environ.get('SCRAPER_API_KEY', 'test-key')
+            
+            if not api_key or api_key != expected_key:
+                self.send_response(401)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                
+                error_response = {"error": "Unauthorized"}
+                self.wfile.write(json.dumps(error_response).encode())
+                return
+            
+            # Read request body
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            url = data.get('url', '').strip()
+            if not url:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                
+                error_response = {"error": "Missing url parameter"}
+                self.wfile.write(json.dumps(error_response).encode())
+                return
+            
+            # Normalize URL
+            if not url.startswith(('http://', 'https://')):
+                url = 'https://' + url
+            
+            # Scrape the page
+            plans = self._scrape_pricing(url)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            self.wfile.write(json.dumps(plans).encode())
+            
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            error_response = {"error": str(e)}
+            self.wfile.write(json.dumps(error_response).encode())
     
-    if request.get('method') != 'POST':
-        return {
-            'statusCode': 405,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({'error': 'Method not allowed'})
-        }
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, x-api-key')
+        self.end_headers()
     
-    # API key authentication
-    api_key_header = request.get('headers', {}).get('x-api-key')
-    expected_key = context.get('SCRAPER_API_KEY', 'test-key')  # Default for testing
-    if not api_key_header or api_key_header != expected_key:
-        return {
-            'statusCode': 401,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({'error': 'Unauthorized'})
-        }
-    
-    try:
-        # Parse request body
-        body = request.get('body', '{}')
-        if isinstance(body, str):
-            data = json.loads(body)
-        else:
-            data = body
-        
-        url = data.get('url', '').strip()
-        if not url:
-            return {
-                'statusCode': 400,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': json.dumps({'error': 'Missing url parameter'})
+    def _scrape_pricing(self, url):
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            plans = self._extract_pricing_plans(soup)
+            
+            return plans
+            
+        except Exception as e:
+            return [{"error": f"Scraping failed: {str(e)}"}]
+    
+    def _extract_pricing_plans(self, soup):
+        plans = []
         
-        # Normalize URL
-        if not url.startswith(('http://', 'https://')):
-            url = 'https://' + url
+        # Find elements that contain pricing information
+        price_pattern = r'[\$€£¥]\s*\d{1,3}(?:[,\.]\d{3})*(?:[,\.]\d{2})?'
         
-        # Fetch the page
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
+        # Look for common pricing selectors
+        pricing_containers = soup.find_all(['div', 'section'], class_=re.compile(r'pric|plan|tier', re.I))
         
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        for container in pricing_containers[:5]:  # Limit to 5 to avoid too many results
+            text = container.get_text()
+            
+            # Check if this container has a price
+            price_match = re.search(price_pattern, text)
+            if price_match:
+                price = price_match.group()
+                
+                # Extract plan name
+                plan_name = "Unknown Plan"
+                heading = container.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                if heading:
+                    plan_name = heading.get_text().strip()
+                
+                # Extract features
+                features = []
+                list_items = container.find_all('li')
+                for li in list_items[:5]:  # Limit features
+                    feature_text = li.get_text().strip()
+                    if feature_text and len(feature_text) < 100:
+                        features.append(feature_text)
+                
+                # Determine pricing model and billing cycle
+                text_lower = text.lower()
+                
+                if 'contact' in text_lower or 'custom' in text_lower:
+                    pricing_model = 'Custom'
+                    price = 'Contact Sales'
+                elif 'per user' in text_lower or '/user' in text_lower:
+                    pricing_model = 'Per-User'
+                elif 'usage' in text_lower or 'api' in text_lower:
+                    pricing_model = 'Usage-Based'
+                elif 'free' in text_lower or price.startswith('$0'):
+                    pricing_model = 'Freemium'
+                else:
+                    pricing_model = 'Tiered'
+                
+                billing_cycle = 'monthly'
+                if 'year' in text_lower or 'annual' in text_lower:
+                    billing_cycle = 'annually'
+                elif 'per user' in text_lower:
+                    billing_cycle = 'per user'
+                
+                plans.append({
+                    "plan_name": plan_name,
+                    "price": price,
+                    "pricing_model": pricing_model,
+                    "features": features,
+                    "billing_cycle": billing_cycle
+                })
         
-        # Parse HTML
-        soup = BeautifulSoup(response.content, 'html.parser')
+        # If no plans found with pricing containers, return a mock plan
+        if not plans:
+            plans = [{
+                "plan_name": "Basic",
+                "price": "Unable to extract",
+                "pricing_model": "Tiered",
+                "features": ["Pricing information not found"],
+                "billing_cycle": "N/A"
+            }]
         
-        # Extract pricing plans
-        plans = extract_pricing_plans(soup, url)
-        
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps(plans)
-        }
-        
-    except requests.RequestException as e:
-        return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({'error': f'Failed to fetch URL: {str(e)}'})
-        }
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({'error': f'Processing error: {str(e)}'})
-        }
-
-def extract_pricing_plans(soup, base_url):
-    """Extract pricing plans from HTML using heuristics"""
-    plans = []
-    
-    # Find potential pricing containers
-    pricing_selectors = [
-        '[class*="pricing" i]',
-        '[class*="plan" i]',
-        '[class*="tier" i]',
-        '[class*="package" i]',
-        '[class*="price" i]',
-        '[id*="pricing" i]',
-        '[id*="plan" i]'
-    ]
-    
-    pricing_containers = []
-    for selector in pricing_selectors:
-        containers = soup.select(selector)
-        pricing_containers.extend(containers)
-    
-    # Also look for common pricing patterns
-    currency_regex = r'[\$€£¥]\s*\d{1,3}(?:,\d{3})*(?:\.\d{2})?'
-    price_elements = soup.find_all(text=re.compile(currency_regex))
-    
-    for elem in price_elements:
-        parent = elem.parent
-        if parent:
-            pricing_containers.append(parent)
-    
-    # Remove duplicates and get unique containers
-    unique_containers = list(set(pricing_containers))
-    
-    # Extract plans from containers
-    for container in unique_containers[:10]:  # Limit to avoid too many results
-        plan = extract_plan_from_container(container)
-        if plan and plan['price']:  # Only add if we found a price
-            plans.append(plan)
-    
-    # Deduplicate plans
-    seen_plans = set()
-    unique_plans = []
-    for plan in plans:
-        plan_key = f"{plan['plan_name']}|{plan['price']}"
-        if plan_key not in seen_plans:
-            seen_plans.add(plan_key)
-            unique_plans.append(plan)
-    
-    return unique_plans[:8]  # Return max 8 plans
-
-def extract_plan_from_container(container):
-    """Extract plan details from a container element"""
-    text = container.get_text() if hasattr(container, 'get_text') else str(container)
-    
-    # Extract price
-    price_regex = r'[\$€£¥]\s*\d{1,3}(?:[,\.]\d{3})*(?:[,\.]\d{2})?(?:/\w+)?'
-    price_match = re.search(price_regex, text)
-    price = price_match.group(0) if price_match else ''
-    
-    # Handle special pricing
-    if re.search(r'contact\s+(sales|us)|custom|enterprise', text, re.IGNORECASE):
-        if not price:
-            price = 'Contact Sales'
-    elif re.search(r'\bfree\b', text, re.IGNORECASE) and not price:
-        price = 'Free'
-    
-    # Extract plan name
-    plan_name = ''
-    if hasattr(container, 'find'):
-        # Look for headings
-        heading = container.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-        if heading:
-            plan_name = heading.get_text().strip()
-    
-    if not plan_name:
-        # Try common plan names
-        plan_patterns = ['basic', 'starter', 'pro', 'premium', 'enterprise', 'business', 'free', 'plus']
-        for pattern in plan_patterns:
-            if re.search(rf'\b{pattern}\b', text, re.IGNORECASE):
-                plan_name = pattern.title()
-                break
-    
-    # Extract features
-    features = []
-    if hasattr(container, 'find_all'):
-        # Look for list items
-        li_elements = container.find_all('li')
-        for li in li_elements[:10]:  # Limit features
-            feature_text = li.get_text().strip()
-            if feature_text and len(feature_text) < 100:
-                features.append(feature_text)
-    
-    # Determine billing cycle
-    billing_cycle = 'N/A'
-    if re.search(r'/month|monthly|per month', text, re.IGNORECASE):
-        billing_cycle = 'monthly'
-    elif re.search(r'/year|yearly|annually|per year', text, re.IGNORECASE):
-        billing_cycle = 'annually'
-    elif re.search(r'per user|/user|per seat|/seat', text, re.IGNORECASE):
-        billing_cycle = 'per user'
-    
-    # Determine pricing model
-    pricing_model = 'Tiered'  # Default
-    if re.search(r'contact\s+(sales|us)|custom|enterprise', text, re.IGNORECASE):
-        pricing_model = 'Custom'
-    elif re.search(r'per user|/user|per seat|/seat', text, re.IGNORECASE):
-        pricing_model = 'Per-User'
-    elif re.search(r'usage|pay as you go|api call|per request', text, re.IGNORECASE):
-        pricing_model = 'Usage-Based'
-    elif re.search(r'\bfree\b|\$0', text, re.IGNORECASE):
-        pricing_model = 'Freemium'
-    
-    return {
-        'plan_name': plan_name or 'Unknown Plan',
-        'price': price,
-        'pricing_model': pricing_model,
-        'features': features,
-        'billing_cycle': billing_cycle
-    }
+        return plans[:3]  # Return max 3 plans
