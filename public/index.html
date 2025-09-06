@@ -261,7 +261,7 @@
     <div class="container">
         <header>
             <h1>🚀 SaaS Pricing Scraper</h1>
-            <p class="subtitle">Extract pricing plans from any SaaS website</p>
+            <p class="subtitle">Extract pricing plans from any SaaS website • Supports multiple languages & CMS platforms</p>
         </header>
 
         <div class="scraper-form">
@@ -285,13 +285,16 @@
             </form>
 
             <div class="examples">
-                <h3>Try these examples:</h3>
+                <h3>Try these examples (supports HubSpot, WordPress, Elementor & international sites):</h3>
                 <div class="example-urls">
                     <span class="example-url" onclick="setUrl('https://stripe.com/pricing')">Stripe</span>
                     <span class="example-url" onclick="setUrl('https://mailchimp.com/pricing')">Mailchimp</span>
                     <span class="example-url" onclick="setUrl('https://slack.com/pricing')">Slack</span>
-                    <span class="example-url" onclick="setUrl('https://notion.so/pricing')">Notion</span>
-                    <span class="example-url" onclick="setUrl('https://airtable.com/pricing')">Airtable</span>
+                    <span class="example-url" onclick="setUrl('https://hubspot.com/pricing')">HubSpot</span>
+                    <span class="example-url" onclick="setUrl('https://intercom.com/pricing')">Intercom</span>
+                    <span class="example-url" onclick="setUrl('https://salesforce.com/pricing')">Salesforce</span>
+                    <span class="example-url" onclick="setUrl('https://zapier.com/pricing')">Zapier</span>
+                    <span class="example-url" onclick="setUrl('https://canva.com/pricing')">Canva</span>
                 </div>
             </div>
         </div>
@@ -357,7 +360,11 @@
             if (!plans || plans.length === 0) {
                 results.innerHTML = `
                     <div class="no-results">
-                        No pricing plans found on this page. The website might not have standard pricing structure or might be blocking automated access.
+                        No pricing plans found on this page. This could be due to:
+                        <br>• Dynamic content that loads with JavaScript (try different sections of the site)
+                        <br>• Unusual pricing page structure
+                        <br>• Website blocking automated requests
+                        <br>• Pricing information in images or embedded forms
                     </div>
                 `;
                 return;
