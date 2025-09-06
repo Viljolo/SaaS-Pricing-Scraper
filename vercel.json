@@ -1,16 +1,13 @@
 {
-  "functions": {
-    "api/scrape.js": {
-      "runtime": "nodejs20.x"
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/*.py",
+      "use": "@vercel/python"
     },
-    "api/test-node.js": {
-      "runtime": "nodejs20.x"
-    },
-    "api/hello-node.js": {
-      "runtime": "nodejs20.x"
-    },
-    "api/scrape-simple.js": {
-      "runtime": "nodejs20.x"
+    {
+      "src": "api/*.js",
+      "use": "@vercel/node"
     }
-  }
+  ]
 }
