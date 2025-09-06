@@ -1,21 +1,16 @@
 {
   "version": 2,
-  "functions": {
-    "api/scrape.js": {
-      "runtime": "nodejs20.x",
-      "memory": 1024,
-      "maxDuration": 10,
-      "regions": ["iad1"]
-    }
-  },
   "builds": [
     {
       "src": "api/*.py",
       "use": "@vercel/python"
     },
     {
-      "src": "api/*.js",
-      "use": "@vercel/node"
+      "src": "api/scrape.js",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 10
+      }
     }
   ],
   "routes": [
