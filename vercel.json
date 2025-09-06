@@ -6,14 +6,19 @@
       "use": "@vercel/python"
     },
     {
-      "src": "api/scrape.js",
-      "use": "@vercel/node",
-      "config": {
-        "maxDuration": 10
-      }
+      "src": "api/*.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
+    {
+      "src": "/api/test-node",
+      "dest": "/api/test-node.js"
+    },
+    {
+      "src": "/api/scrape-simple",
+      "dest": "/api/scrape-simple.js"
+    },
     {
       "src": "/api/scrape",
       "dest": "/api/scrape.js"

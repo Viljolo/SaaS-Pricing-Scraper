@@ -1,5 +1,10 @@
-const chromium = require('@sparticuz/chromium');
-const puppeteer = require('puppeteer-core');
+let chromium, puppeteer;
+try {
+  chromium = require('@sparticuz/chromium');
+  puppeteer = require('puppeteer-core');
+} catch (err) {
+  console.log('Puppeteer dependencies not available:', err.message);
+}
 
 function buildCorsHeaders(originHeader) {
   const allowedOriginsEnv = process.env.CORS_ORIGINS || '*';
@@ -67,6 +72,13 @@ module.exports = async (req, res) => {
     const targetUrl = normalizeUrl(url);
     if (!targetUrl) {
       return res.status(400).set({ 'Content-Type': 'application/json', ...corsHeaders }).json({ error: 'Invalid or missing url' });
+    }
+
+    // Check if puppeteer is available
+    if (!chromium || !puppeteer) {
+      return res.status(500).set({ 'Content-Type': 'application/json', ...corsHeaders }).json({ 
+        error: 'Puppeteer dependencies not available. Try /api/scrape-simple for basic scraping.' 
+      });
     }
 
     // Configure Chromium for serverless
