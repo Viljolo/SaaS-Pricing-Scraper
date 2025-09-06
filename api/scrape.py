@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 import re
 from urllib.parse import urljoin, urlparse
 
-def handler(request, context):
+def handler(request, context=None):
     # Handle CORS preflight
     if request.get('method') == 'OPTIONS':
         return {
