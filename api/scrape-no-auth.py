@@ -3,44 +3,19 @@ import json
 import requests
 from bs4 import BeautifulSoup
 import re
-import os
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
-            # Check API key (case-insensitive header lookup)
-            api_key = self.headers.get('x-api-key') or self.headers.get('X-API-Key') or ''
-            expected_key = os.environ.get('SCRAPER_API_KEY', 'test-key')
-            
-            # Debug: log the keys being compared (remove in production)
-            print(f"Received API key: '{api_key}'")
-            print(f"Expected API key: '{expected_key}'")
-            
-            if not api_key or api_key != expected_key:
-                self.send_response(401)
-                self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                
-                error_response = {"error": "Unauthorized"}
-                self.wfile.write(json.dumps(error_response).encode())
-                return
-            
             # Read request body
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            data = json.loads(post_data.decode('utf-8'))
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length > 0:
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode('utf-8'))
+            else:
+                data = {}
             
-            url = data.get('url', '').strip()
-            if not url:
-                self.send_response(400)
-                self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                
-                error_response = {"error": "Missing url parameter"}
-                self.wfile.write(json.dumps(error_response).encode())
-                return
+            url = data.get('url', 'https://stripe.com/pricing').strip()
             
             # Normalize URL
             if not url.startswith(('http://', 'https://')):
@@ -62,14 +37,35 @@ class handler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             
+            error_response = {"error": str(e), "url": url if 'url' in locals() else 'unknown'}
+            self.wfile.write(json.dumps(error_response).encode())
+    
+    def do_GET(self):
+        # Default test with Stripe pricing
+        try:
+            plans = self._scrape_pricing('https://stripe.com/pricing')
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            self.wfile.write(json.dumps(plans).encode())
+            
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
             error_response = {"error": str(e)}
             self.wfile.write(json.dumps(error_response).encode())
     
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, x-api-key')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
     
     def _scrape_pricing(self, url):
@@ -78,7 +74,7 @@ class handler(BaseHTTPRequestHandler):
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
             
-            response = requests.get(url, headers=headers, timeout=10)
+            response = requests.get(url, headers=headers, timeout=15)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -87,7 +83,7 @@ class handler(BaseHTTPRequestHandler):
             return plans
             
         except Exception as e:
-            return [{"error": f"Scraping failed: {str(e)}"}]
+            return [{"error": f"Scraping failed: {str(e)}", "url": url}]
     
     def _extract_pricing_plans(self, soup):
         plans = []
@@ -125,7 +121,8 @@ class handler(BaseHTTPRequestHandler):
                 
                 if 'contact' in text_lower or 'custom' in text_lower:
                     pricing_model = 'Custom'
-                    price = 'Contact Sales'
+                    if not price or price == price_match.group():
+                        price = 'Contact Sales'
                 elif 'per user' in text_lower or '/user' in text_lower:
                     pricing_model = 'Per-User'
                 elif 'usage' in text_lower or 'api' in text_lower:
@@ -149,13 +146,13 @@ class handler(BaseHTTPRequestHandler):
                     "billing_cycle": billing_cycle
                 })
         
-        # If no plans found with pricing containers, return a mock plan
+        # If no plans found, return a default response
         if not plans:
             plans = [{
-                "plan_name": "Basic",
-                "price": "Unable to extract",
-                "pricing_model": "Tiered",
-                "features": ["Pricing information not found"],
+                "plan_name": "No Plans Found",
+                "price": "Unable to extract pricing",
+                "pricing_model": "Unknown",
+                "features": ["Could not find pricing information on this page"],
                 "billing_cycle": "N/A"
             }]
         
