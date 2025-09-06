@@ -1,4 +1,4 @@
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -59,4 +59,4 @@ module.exports = async (req, res) => {
       error: String(err.message || err) 
     });
   }
-};
+}

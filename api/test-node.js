@@ -1,4 +1,4 @@
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   // Simple test function
   if (req.method === 'OPTIONS') {
     return res.status(200).set({
@@ -14,6 +14,7 @@ module.exports = async (req, res) => {
   }).json({
     message: 'Node.js endpoint working!',
     method: req.method,
-    url: req.url
+    url: req.url,
+    timestamp: new Date().toISOString()
   });
-};
+}

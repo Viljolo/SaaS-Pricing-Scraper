@@ -48,7 +48,7 @@ function parseBillingCycle(text) {
   return 'N/A';
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   const corsHeaders = buildCorsHeaders(req.headers.origin);
 
   // CORS preflight
@@ -252,5 +252,5 @@ module.exports = async (req, res) => {
   } catch (err) {
     return res.status(500).set({ 'Content-Type': 'application/json', ...corsHeaders }).json({ error: String(err && err.message || err) });
   }
-};
+}
 
